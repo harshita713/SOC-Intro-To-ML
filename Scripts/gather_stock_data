@@ -1,0 +1,70 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+import sys
+import os
+import csv
+import time
+import datetime
+
+# Import YCharts API client to fetch stock market data
+from ychartspy.client import YChartsClient
+
+
+def convert(timestamp):
+    '''
+        This function converts a timestamp (in milliseconds)
+        into a readable date format (YYYY-MM-DD).
+    '''
+    return datetime.datetime.fromtimestamp(int(timestamp) / 1e3).strftime('%Y-%m-%d')
+
+
+def main(symbol_file, parameter_file, output_dir):
+    '''
+        This function fetches stock metrics for a list of symbols from YCharts API 
+        and saves them in CSV files.
+
+        Parameters:
+        ------------------------
+        parameter_file : A file that contains the stock parameters to fetch 
+                         (e.g., ps_ratio, dividend_yield), one per line.
+        symbol_file    : A file containing stock symbols, each symbol on a new line.
+        output_dir     : Folder where the output CSV files will be saved. 
+                         Each stock symbol gets its own CSV file.
+    '''
+    
+    # Read all parameters from the parameter file
+    param_fp = open(parameter_file, 'r')
+    param_list = []
+    count = {}   # Keeps track of parameters successfully fetched
+
+    for parameter in param_fp:
+        param_list.append(parameter.strip())
+        count[parameter.strip()] = 0
+
+    # Create YCharts API client
+    client = YChartsClient()
+
+    error_count = {}  # To count how many times each parameter fails
+
+    # Open the file with stock symbols
+    with open(symbol_file, 'r') as sym_fp:
+        for symbol in list(csv.reader(sym_fp)):
+            row_info = {}                # Dictionary to store parameter data for each date
+            symbol = symbol[0].strip()   # Extract stock symbol
+
+            to_write = []                # List to store rows to write into CSV
+            to_write.append(['symbol', 'timestamp'])  # Add header columns
+
+            non_params = []  # List to keep track of parameters that failed to fetch
+            
+            print symbol  # Print current symbol being processed
+
+            # Loop over all parameters we need to fetch
+            for parameter in param_list:
+                parameter = parameter.strip()
+                to_write[0].append(parameter)  # Add parameter name to header
+
+                # Try to get data from API
+                try:
+                    row = client.get_security_metric(symbol, parameter, start_date="01/01/1900")
+                except Exception, e:
