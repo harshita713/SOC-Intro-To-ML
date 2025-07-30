@@ -1,0 +1,108 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+import sys
+import os
+import csv
+import pandas
+
+# Import machine learning tools
+from sklearn.feature_selection import RFECV      # Recursive Feature Elimination with Cross-Validation
+from sklearn.svm import SVR                      # Support Vector Regression (not used here but imported)
+from sklearn.linear_model import LinearRegression  # Linear Regression model
+from sklearn.cross_validation import StratifiedKFold  # Stratified K-Fold Cross-validation (deprecated in newer sklearn)
+import numpy as np
+import datetime
+
+
+def conv(s):
+    '''
+        This function tries to convert a string into a float.
+        If conversion fails, it just returns the original value.
+    '''
+    try:
+        s = float(s)
+    except ValueError:
+        pass
+    return s
+
+
+def main(dir_path):
+    '''
+        This function reads stock data files, prepares features (X) and target values (y),
+        and applies Recursive Feature Elimination (RFE) with Cross-Validation to 
+        rank the importance of features.
+    '''
+    files = os.listdir(dir_path)  # List all files in the given directory
+
+    X = []          # List to store feature values
+    y = []          # List to store target values
+    ranking = []    # Stores cumulative ranking of features
+
+    # Process each CSV file in the directory
+    for file_name in files:
+        with open(os.path.join(dir_path, file_name), 'r') as textfile:
+            
+            # Read CSV file into a pandas DataFrame
+            data = pandas.read_csv(os.path.join(dir_path, file_name), header=0)
+
+            # Set a test start date (not used later but kept in code)
+            start_test = datetime.datetime(2005, 1, 1)
+
+            # Extract the 'adj_close' column from the data
+            col = list(data.adj_close)
+
+            # Example feature and target values (currently using only first 2 and last 2 values)
+            X = [col[:2]]         # Taking first two adjusted close values as features
+            y = [col[-1], col[-2]]  # Taking last two adjusted close values as target
+
+            print X
+            print y
+
+            '''
+            The following commented section was used earlier to:
+            - Read each row from CSV
+            - Skip rows with empty values
+            - Extract certain columns as features
+            - Convert values to float
+            - Append them to X and y
+            Currently disabled but kept for reference.
+            '''
+
+        # Convert lists to numpy arrays for sklearn
+        X = np.array(X, np.float64)
+        y = np.array(y, np.float64)
+
+        # Define the estimator (Linear Regression model)
+        estimator = LinearRegression()
+
+        # Create a Recursive Feature Elimination with Cross-Validation object
+        selector = RFECV(estimator, step=1, cv=StratifiedKFold(y, 2))
+
+        # Fit the selector on the data to rank features
+        selector = selector.fit(X, y)
+
+        '''
+        The try-except block for debugging is commented out, 
+        but originally was used to catch and print errors during fitting.
+        '''
+
+        # Reset X and y for next file
+        X = []
+        y = []
+
+        # Aggregate ranking results across files
+        if len(ranking) != 0:
+            ranking = [sum(x) for x in zip(ranking, selector.ranking_)]
+        else:
+            ranking = selector.ranking_
+
+        # Print feature ranking after processing each file
+        print ranking
+
+    # Final ranking after all files processed
+    print ranking
+
+
+# Script entry point
+if __name__ == '__main__':
+    main(sys.argv[1])
