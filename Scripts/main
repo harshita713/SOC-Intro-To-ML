@@ -1,0 +1,48 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+'''
+    This is the main file of the program.
+    It reads stock CSV files, performs interpolation and normalization, 
+    and saves the processed files.
+'''
+
+import os
+import sys
+import pandas as pd
+
+# Import functions from other files
+from interpolation import interpolate
+from normalization import normalize
+
+
+def main(dir_path, output_dir):
+    '''
+        This function runs the processing steps (interpolation and normalization)
+        on all CSV files one by one from the input folder.
+    '''
+    
+    # Get the list of all files from the input directory
+    files = os.listdir(dir_path)
+
+    # Go through each file in the folder
+    for file_name in files:
+        
+        # Read CSV file into a pandas DataFrame
+        file_dataframe = pd.read_csv(os.path.join(dir_path, file_name))
+
+        # These are the columns we want to process
+        cols = ['high', 'open', 'low', 'close', 'volume', 'adj_close']
+
+        # Step 1: Interpolate missing data in these columns
+        file_dataframe = interpolate(file_dataframe, cols)
+
+        # Step 2: Normalize these columns (scaling the values)
+        file_dataframe = normalize(file_dataframe, cols)
+
+        # Save the processed DataFrame back to a new CSV in the output folder
+        file_dataframe.to_csv(
+            os.path.join(output_dir, file_name), encoding='utf-8', index=False)
+
+# This part starts the program when you run the script from terminal
+if __name__ == '__main__':
+    main(sys.argv[1], sys.argv[2])
