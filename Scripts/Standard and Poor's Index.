@@ -1,0 +1,36 @@
+import os, sys, csv
+import math
+import pprint
+
+def roundup(var):
+    '''
+        This function rounds a number to 6 decimal places 
+        and returns it as a float.
+    '''
+    return float(format(var, '.6f'))
+
+
+def main(dir_path, sp_index_file, output_dir):
+    '''
+        This function combines stock data with S&P index data.
+
+        - Reads stock CSV files from dir_path.
+        - Reads S&P index file.
+        - Matches data by date and merges it.
+        - Writes combined data into a new file in output_dir.
+    '''
+    files = os.listdir(dir_path)  # List all files in the input directory
+
+    for file_name in files:
+        # Open each stock CSV file
+        with open(os.path.join(dir_path, file_name), 'r') as textfile:
+
+            # Create a new output CSV file with same name in output_dir
+            new_file = open(os.path.join(output_dir, file_name), 'w+')
+
+            new_list = []  # Will hold all rows to be written to the new file
+            
+            # Add the header row with extra columns for S&P index data
+            new_list.append(['symbol','date','open','high','low','close','volume','adj_close', 
+                'prev_day_diff', '50_day_moving_avg', '10_day_volatility', 
+                's&p_index_open', 's&p_index_high', 's&p_index_low', 
