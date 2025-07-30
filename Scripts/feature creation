@@ -1,0 +1,65 @@
+import os, sys, csv
+import math
+import pprint
+
+def roundup(var):
+    # This function rounds a number to 6 decimal places
+    return float(format(var, '.6f'))
+
+def main(dir_path, sp_index_file, output_dir):
+    # List all stock data files in the input directory
+    files = os.listdir(dir_path)
+
+    # Loop through each stock data file
+    for file_name in files:
+        # Open the current stock file in read mode
+        with open(os.path.join(dir_path, file_name), 'r') as textfile:
+
+            # Create a new file in the output directory to save merged data
+            new_file = open(os.path.join(output_dir, file_name), 'w+')
+
+            new_list = []  # This will store all processed rows
+
+            # Add a header row with columns for stock data and S&P index data
+            new_list.append(['symbol','date','open','high','low','close','volume','adj_close',
+                             'prev_day_diff', '50_day_moving_avg', '10_day_volatility',
+                             's&p_index_open', 's&p_index_high', 's&p_index_low',
+                             's&p_index_close', 's&p_index_volume', 's&p_index_adj_close'])
+
+            dict_mapping = {}  # Dictionary to map date → stock row
+
+            # Read stock data and store rows with date as the key
+            for count, row in enumerate(reversed(list(csv.reader(textfile)))):
+                if str(row[0]) == "symbol":  # Stop when header row is reached
+                    break
+                date = str(row[1])           # Extract the date column
+                dict_mapping[date] = row     # Store the stock row under that date
+
+            """
+            Now, open the S&P index file and match its rows by date 
+            with the stock data in dict_mapping. If dates match, 
+            extend the stock row by adding S&P index values.
+            """
+            with open(sp_index_file, 'r') as sp_index_fp:
+                for count2, row2 in enumerate(reversed(list(csv.reader(sp_index_fp)))):
+                    if str(row2[0]) in dict_mapping:
+                        dict_mapping[str(row2[0])].extend(row2[1:])
+
+            # If you need to debug, uncomment the following line:
+            # pprint.pprint(dict_mapping, width=1)
+
+            # Write the merged data into new_list sorted by date
+            for key in sorted(dict_mapping):
+                new_list.append(dict_mapping[key])
+
+            # Save the final merged dataset into the new CSV file
+            writer = csv.writer(new_file)
+            writer.writerows(new_list)
+            new_file.close()
+
+        # Close the original stock file
+        textfile.close()
+
+# Entry point: Takes input folder, S&P index file, and output folder as arguments
+if __name__ == '__main__':
+    main(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]))
