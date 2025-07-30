@@ -1,0 +1,92 @@
+# This program reads CSV stock data files, calculates daily differences, 
+# 50-day moving averages, and 10-day volatility, and writes the processed data to new files.
+
+import os, sys, csv
+import math
+
+# This function rounds a number to 6 decimal places
+def roundup(var):
+    return float(format(var, '.6f'))
+
+# Main function to process files
+def main(dir_path, output_dir):
+    files = os.listdir(dir_path)  # Get all file names in the input folder
+    
+    for file_name in files:
+        # Open each input file in read mode
+        with open(os.path.join(dir_path, file_name), 'r') as textfile:
+            # Create a new output file with same name in output folder
+            new_file = open(os.path.join(output_dir, file_name), 'w+')
+            new_list = []  # List to store processed rows
+
+            # Initial values
+            prev = 0.0
+            diff = 0.0
+            avg = 0.0
+            num_moving_avg = 50  # For 50-day moving average
+            volatile_avg = 0.0
+            num_volatile = 10    # For 10-day volatility
+            curr_volatility = 0.0
+
+            # Read rows from the file in reverse order
+            for count, row in enumerate(reversed(list(csv.reader(textfile)))):
+                if not count:  # If it is the first row
+                    try:
+                        row[8] = prev  # Add previous day difference as 0
+                    except Exception, e:
+                        row.append(prev)
+                else:
+                    # Calculate difference between today and previous day's close
+                    diff = roundup(float(row[7]) - float(prev))
+                    try:
+                        row[8] = diff
+                    except Exception, e:
+                        row.append(diff)
+                
+                # Calculate 50-day moving average
+                if count < num_moving_avg:
+                    avg = roundup((count * avg + float(row[7])) / (count + 1))
+                else:
+                    avg = roundup((num_moving_avg * avg + float(row[7]) - float(new_list[count - num_moving_avg][7])) / num_moving_avg)
+
+                prev = float(row[7])  # Update previous day's close value
+                
+                # Calculate average for 10-day volatility
+                if count < num_volatile:
+                    volatile_avg = roundup((count * volatile_avg + float(row[7])) / (count + 1))
+                else:
+                    volatile_avg = roundup((num_volatile * volatile_avg + float(row[7]) - float(new_list[count - num_volatile][7])) / num_volatile)
+
+                # Calculate volatility (standard deviation)
+                if count:
+                    loop_count = min(count, num_volatile)
+                    for i in range(loop_count):
+                        curr_volatility += math.pow((float(row[7]) - volatile_avg), 2)
+
+                    curr_volatility = roundup(math.sqrt(curr_volatility / loop_count))
+                
+                # Try to insert calculated values, else append them
+                try:
+                    row[9] = avg
+                    row[10] = curr_volatility
+                except Exception, e:
+                    row.append(avg)
+                    row.append(curr_volatility)
+
+                # Add processed row to list
+                new_list.append(row)
+                curr_volatility = 0.0  # Reset volatility for next row
+
+            # Insert header at the top of the list
+            new_list.insert(0, ['symbol','date','open','high','low','close','volume','adj_close', 
+                                'prev_day_diff', '50_day_moving_avg', '10_day_volatility'])
+
+            # Write processed data to output file
+            writer = csv.writer(new_file)
+            writer.writerows(new_list)
+            new_file.close()
+        textfile.close()
+
+
+if __name__ == '__main__':
+    main(str(sys.argv[1]), str(sys.argv[2]))
