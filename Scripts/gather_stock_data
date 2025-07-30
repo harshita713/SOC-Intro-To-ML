@@ -1,70 +1,123 @@
 #! /usr/bin/python
-# -*- coding: utf-8 -*-
 import sys
 import os
 import csv
 import time
 import datetime
 
-# Import YCharts API client to fetch stock market data
+# Import YCharts API client to retrieve stock market metrics
 from ychartspy.client import YChartsClient
 
-
 def convert(timestamp):
-    '''
-        This function converts a timestamp (in milliseconds)
-        into a readable date format (YYYY-MM-DD).
-    '''
+    # Convert timestamp (in milliseconds) to a readable date format (YYYY-MM-DD)
     return datetime.datetime.fromtimestamp(int(timestamp) / 1e3).strftime('%Y-%m-%d')
-
 
 def main(symbol_file, parameter_file, output_dir):
     '''
-        This function fetches stock metrics for a list of symbols from YCharts API 
-        and saves them in CSV files.
+    This function fetches stock metrics from the YCharts API for given symbols
+    and saves the data in CSV files.
 
-        Parameters:
-        ------------------------
-        parameter_file : A file that contains the stock parameters to fetch 
-                         (e.g., ps_ratio, dividend_yield), one per line.
-        symbol_file    : A file containing stock symbols, each symbol on a new line.
-        output_dir     : Folder where the output CSV files will be saved. 
-                         Each stock symbol gets its own CSV file.
+    Parameters:
+    ------------------------
+    parameter_file: Path to file containing stock parameters to fetch (e.g., ps_ratio, dividend_yield), one per line.
+    symbol_file: Path to text/CSV file containing stock symbols, one symbol per line.
+    output_dir: Path to output directory where results will be saved as separate CSVs per stock symbol.
     '''
-    
-    # Read all parameters from the parameter file
+
+    # Read parameters from parameter file
     param_fp = open(parameter_file, 'r')
-    param_list = []
-    count = {}   # Keeps track of parameters successfully fetched
+    param_list = []      # List of parameters to fetch
+    count = {}           # Dictionary to track which parameters were successfully retrieved
 
     for parameter in param_fp:
         param_list.append(parameter.strip())
         count[parameter.strip()] = 0
 
-    # Create YCharts API client
+    # Create an instance of the YCharts client
     client = YChartsClient()
 
-    error_count = {}  # To count how many times each parameter fails
+    error_count = {}     # Dictionary to store error counts for failed parameters
 
-    # Open the file with stock symbols
+    # Open file containing stock symbols
     with open(symbol_file, 'r') as sym_fp:
         for symbol in list(csv.reader(sym_fp)):
-            row_info = {}                # Dictionary to store parameter data for each date
-            symbol = symbol[0].strip()   # Extract stock symbol
+            row_info = {}                # Dictionary to store parameter data keyed by date
+            symbol = symbol[0].strip()   # Extract the stock symbol
 
-            to_write = []                # List to store rows to write into CSV
-            to_write.append(['symbol', 'timestamp'])  # Add header columns
+            to_write = []                # Final list to write to CSV
+            to_write.append(['symbol', 'timestamp'])  # Add header row
 
-            non_params = []  # List to keep track of parameters that failed to fetch
+            non_params = []              # List to store parameters that could not be fetched
             
-            print symbol  # Print current symbol being processed
+            print symbol                 # Print current symbol being processed
 
-            # Loop over all parameters we need to fetch
+            # Loop through each parameter and fetch data from the API
             for parameter in param_list:
                 parameter = parameter.strip()
-                to_write[0].append(parameter)  # Add parameter name to header
+                to_write[0].append(parameter)  # Add parameter to header
 
-                # Try to get data from API
                 try:
+                    # Get parameter data for the given stock symbol
                     row = client.get_security_metric(symbol, parameter, start_date="01/01/1900")
                 except Exception, e:
+                    # If API call fails, log the error and continue to next parameter
+                    if parameter in error_count:
+                        error_count[parameter] += 1
+                    else:
+                        error_count[parameter] = 1
+                    non_params.append(parameter)
+                    continue
+                
+                # Store the fetched data into row_info, organized by timestamp
+                for row_obj in row:        
+                    if row_obj[0] not in row_info:
+                        row_info[row_obj[0]] = {}
+                    row_info[row_obj[0]][str(parameter)] = row_obj[1]
+                    
+                # Mark that this parameter has been successfully fetched
+                if count[parameter] == 0:
+                    count[parameter] = 1
+
+            # Create an output CSV file for this stock symbol
+            new_file = open(os.path.join(output_dir, str(symbol) + '.csv'), 'w+')
+
+            # Write data sorted by timestamp
+            for key in sorted(row_info):
+                temp = []
+                temp.append(str(symbol))       # Add stock symbol
+                temp.append(convert(key))      # Convert timestamp to date
+
+                # Add values for each parameter, or NaN if missing
+                for parameter in param_list:
+                    parameter = str(parameter)
+
+                    # If parameter never fetched, remove it from headers
+                    if count[parameter] == 0:
+                        param_list.remove(parameter)
+                        to_write[0].remove(parameter)
+                        continue
+
+                    if parameter in row_info[key]:
+                        temp.append(row_info[key][parameter])
+                    else:
+                        temp.append('NaN')
+                
+                to_write.append(temp)
+
+            # Write the collected rows into the CSV file
+            writer = csv.writer(new_file)
+            writer.writerows(to_write)
+            new_file.close()
+
+    '''
+    Debugging section:
+    Uncomment to print parameters that failed for all symbols
+    for key in error_count:
+        if error_count[key] == 7:
+            print key
+    '''
+    # print non_params
+
+# Entry point: takes symbol_file, parameter_file, and output_dir as arguments
+if __name__ == '__main__':
+    main(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]))
